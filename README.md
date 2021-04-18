@@ -1,6 +1,6 @@
-# monkey
+# Monkey
 
-This is my repo for working through [Writing an Interpreter in Go](https://interpreterbook.com/) and subsequently [Writing a Compiler in Go](https://compilerbook.com/), both by Thorsten Ball.
+This is my repo for working through [Writing an Interpreter in Go](https://interpreterbook.com/) and subsequently [Writing a Compiler in Go](https://compilerbook.com/), both by Thorsten Ball. They implement a programming language called Monkey.
 
 ## Why are you learning about interpreters and compilers?
 
