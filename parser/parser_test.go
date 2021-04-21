@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -78,6 +79,126 @@ func TestIntLiteralExpression(t *testing.T) {
 	expr := stmt.Expression.(*ast.IntegerLiteral)
 	assert.Equal(t, int64(5), expr.Value)
 	assert.Equal(t, `5`, expr.TokenLiteral())
+}
+
+func TestPrefixExpressions(t *testing.T) {
+	tests := []struct {
+		input        string
+		operator     string
+		integerValue int64
+	}{
+		{`!5;`, `!`, 5},
+		{`-15;`, `-`, 15},
+	}
+
+	for _, tc := range tests {
+		program := initializeParserTest(t, tc.input)
+		assert.Len(t, program.Statements, 1)
+		assert.IsType(t, &ast.ExpressionStatement{}, program.Statements[0])
+		stmt := program.Statements[0].(*ast.ExpressionStatement)
+		assert.IsType(t, &ast.PrefixExpression{}, stmt.Expression)
+		expr := stmt.Expression.(*ast.PrefixExpression)
+		assert.Equal(t, tc.operator, expr.Operator)
+		assert.IsType(t, &ast.IntegerLiteral{}, expr.Right)
+		il := expr.Right.(*ast.IntegerLiteral)
+		assert.Equal(t, tc.integerValue, il.Value)
+		assert.Equal(t, fmt.Sprintf(`%d`, tc.integerValue), il.TokenLiteral())
+	}
+}
+
+func TestInfixExpressions(t *testing.T) {
+	tests := []struct {
+		input      string
+		leftValue  int64
+		operator   string
+		rightValue int64
+	}{
+		{`5 + 5`, 5, `+`, 5},
+		{`5 - 5`, 5, `-`, 5},
+		{`5 * 5`, 5, `*`, 5},
+		{`5 / 5`, 5, `/`, 5},
+		{`5 > 5`, 5, `>`, 5},
+		{`5 < 5`, 5, `<`, 5},
+		{`5 == 5`, 5, `==`, 5},
+		{`5 != 5`, 5, `!=`, 5},
+	}
+
+	for _, tc := range tests {
+		program := initializeParserTest(t, tc.input)
+		assert.Len(t, program.Statements, 1)
+		assert.IsType(t, &ast.ExpressionStatement{}, program.Statements[0])
+		stmt := program.Statements[0].(*ast.ExpressionStatement)
+		assert.IsType(t, &ast.InfixExpression{}, stmt.Expression)
+		expr := stmt.Expression.(*ast.InfixExpression)
+		assert.Equal(t, tc.operator, expr.Operator)
+		assert.IsType(t, &ast.IntegerLiteral{}, expr.Left)
+		left := expr.Left.(*ast.IntegerLiteral)
+		assert.Equal(t, tc.leftValue, left.Value)
+		assert.Equal(t, fmt.Sprintf(`%d`, tc.leftValue), left.TokenLiteral())
+		right := expr.Right.(*ast.IntegerLiteral)
+		assert.Equal(t, tc.rightValue, right.Value)
+		assert.Equal(t, fmt.Sprintf(`%d`, tc.rightValue), right.TokenLiteral())
+	}
+}
+
+func TestOperatorPrecedenceParsing(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{
+			`-a * b`,
+			`((-a) * b)`,
+		},
+		{
+			`!-a`,
+			`(!(-a))`,
+		},
+		{
+			`a + b + c`,
+			`((a + b) + c)`,
+		},
+		{
+			`a + b - c`,
+			`((a + b) - c)`,
+		},
+		{
+			`a * b * c`,
+			`((a * b) * c)`,
+		},
+		{
+			`a * b / c`,
+			`((a * b) / c)`,
+		},
+		{
+			`a + b / c`,
+			`(a + (b / c))`,
+		},
+		{
+			`a + b * c + d / e - f`,
+			`(((a + (b * c)) + (d / e)) - f)`,
+		},
+		{
+			`3 + 4; -5 * 5;`,
+			`(3 + 4)((-5) * 5)`,
+		},
+		{
+			`5 > 4 == 3 < 4`,
+			`((5 > 4) == (3 < 4))`,
+		},
+		{
+			`5 > 4 != 3 < 4`,
+			`((5 > 4) != (3 < 4))`,
+		},
+		{
+			`3 + 4 * 5 == 3 * 1 + 4 * 5`,
+			`((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))`,
+		},
+	}
+	for _, tc := range tests {
+		program := initializeParserTest(t, tc.input)
+		assert.Equal(t, tc.expected, program.String())
+	}
 }
 
 func initializeParserTest(t *testing.T, input string) *ast.Program {
