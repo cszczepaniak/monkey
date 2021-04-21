@@ -1,27 +1,27 @@
 package token
 
-type TokenType string
+type Type string
 
 type Token struct {
-	Type    TokenType
+	Type    Type
 	Literal string
 }
 
-func New(tokenType TokenType, ch byte) Token {
+func New(tokenType Type, ch byte) Token {
 	return Token{
 		Type:    tokenType,
 		Literal: string(ch),
 	}
 }
 
-func LookupIdent(ident string) TokenType {
+func LookupIdent(ident string) Type {
 	if tok, ok := keywords[ident]; ok {
 		return tok
 	}
 	return IDENT
 }
 
-var keywords = map[string]TokenType{
+var keywords = map[string]Type{
 	"fn":     FUNCTION,
 	"let":    LET,
 	"if":     IF,
@@ -49,7 +49,7 @@ const (
 	LT       = "<"
 	GT       = ">"
 	EQ       = "=="
-	NOT_EQ   = "!="
+	NEQ      = "!="
 
 	// delimiters
 	COMMA     = ","

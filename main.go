@@ -10,11 +10,11 @@ import (
 )
 
 func main() {
-	user, err := user.Current()
+	currentUser, err := user.Current()
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Hello, %s! This is the Monkey programming language\n", user.Username)
+	fmt.Printf("Hello, %s! This is the Monkey programming language\n", currentUser.Username)
 	fmt.Printf("Feel free to type some commands...\n")
 	repl.Start(os.Stdin, os.Stdout)
 }
