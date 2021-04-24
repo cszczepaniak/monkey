@@ -33,8 +33,7 @@ func TestLetStatements(t *testing.T) {
 		assert.Equal(t, `let`, program.Statements[i].TokenLiteral())
 		assert.IsType(t, &ast.LetStatement{}, program.Statements[i])
 		letStmt := program.Statements[i].(*ast.LetStatement)
-		assert.Equal(t, tc.expectedIdentifier, letStmt.Name.Value)
-		assert.Equal(t, tc.expectedIdentifier, letStmt.Name.TokenLiteral())
+		testIdentifier(t, letStmt.Name, tc.expectedIdentifier)
 	}
 }
 
@@ -49,9 +48,23 @@ func TestReturnStatements(t *testing.T) {
 
 	assert.Len(t, program.Statements, 3)
 
-	for _, s := range program.Statements {
-		assert.IsType(t, &ast.ReturnStatement{}, s)
-		assert.Equal(t, `return`, s.TokenLiteral())
+	tests := []struct {
+		expVal int64
+	}{{
+		5,
+	}, {
+		10,
+	}, {
+		239332,
+	}}
+
+	for i, _ := range tests {
+		s := program.Statements[i]
+		fmt.Print(s)
+		assert.IsType(t, &ast.ReturnStatement{}, program.Statements[i])
+		ret := program.Statements[i].(*ast.ReturnStatement)
+		assert.Equal(t, `return`, ret.TokenLiteral())
+		// testIntegerLitseral(t, ret.ReturnValue, tc.expVal)
 	}
 }
 
@@ -75,20 +88,40 @@ func TestIntLiteralExpression(t *testing.T) {
 	assert.Len(t, program.Statements, 1)
 	assert.IsType(t, &ast.ExpressionStatement{}, program.Statements[0])
 	stmt := program.Statements[0].(*ast.ExpressionStatement)
-	assert.IsType(t, &ast.IntegerLiteral{}, stmt.Expression)
-	expr := stmt.Expression.(*ast.IntegerLiteral)
-	assert.Equal(t, int64(5), expr.Value)
-	assert.Equal(t, `5`, expr.TokenLiteral())
+	testIntegerLiteral(t, stmt.Expression, 5)
+}
+
+func TestBoolLiteralExpression(t *testing.T) {
+	tests := []struct {
+		input  string
+		expVal bool
+	}{{
+		`true;`,
+		true,
+	}, {
+		`false;`,
+		false,
+	}}
+
+	for _, tc := range tests {
+		program := initializeParserTest(t, tc.input)
+		assert.Len(t, program.Statements, 1)
+		assert.IsType(t, &ast.ExpressionStatement{}, program.Statements[0])
+		stmt := program.Statements[0].(*ast.ExpressionStatement)
+		testLiteralExpression(t, stmt.Expression, tc.expVal)
+	}
 }
 
 func TestPrefixExpressions(t *testing.T) {
 	tests := []struct {
-		input        string
-		operator     string
-		integerValue int64
+		input    string
+		operator string
+		expVal   interface{}
 	}{
 		{`!5;`, `!`, 5},
 		{`-15;`, `-`, 15},
+		{`!true;`, `!`, true},
+		{`!false;`, `!`, false},
 	}
 
 	for _, tc := range tests {
@@ -99,19 +132,16 @@ func TestPrefixExpressions(t *testing.T) {
 		assert.IsType(t, &ast.PrefixExpression{}, stmt.Expression)
 		expr := stmt.Expression.(*ast.PrefixExpression)
 		assert.Equal(t, tc.operator, expr.Operator)
-		assert.IsType(t, &ast.IntegerLiteral{}, expr.Right)
-		il := expr.Right.(*ast.IntegerLiteral)
-		assert.Equal(t, tc.integerValue, il.Value)
-		assert.Equal(t, fmt.Sprintf(`%d`, tc.integerValue), il.TokenLiteral())
+		testLiteralExpression(t, expr.Right, tc.expVal)
 	}
 }
 
 func TestInfixExpressions(t *testing.T) {
 	tests := []struct {
 		input      string
-		leftValue  int64
+		leftValue  interface{}
 		operator   string
-		rightValue int64
+		rightValue interface{}
 	}{
 		{`5 + 5`, 5, `+`, 5},
 		{`5 - 5`, 5, `-`, 5},
@@ -121,6 +151,9 @@ func TestInfixExpressions(t *testing.T) {
 		{`5 < 5`, 5, `<`, 5},
 		{`5 == 5`, 5, `==`, 5},
 		{`5 != 5`, 5, `!=`, 5},
+		{`true == true`, true, `==`, true},
+		{`false != true`, false, `!=`, true},
+		{`false == false`, false, `==`, false},
 	}
 
 	for _, tc := range tests {
@@ -128,16 +161,7 @@ func TestInfixExpressions(t *testing.T) {
 		assert.Len(t, program.Statements, 1)
 		assert.IsType(t, &ast.ExpressionStatement{}, program.Statements[0])
 		stmt := program.Statements[0].(*ast.ExpressionStatement)
-		assert.IsType(t, &ast.InfixExpression{}, stmt.Expression)
-		expr := stmt.Expression.(*ast.InfixExpression)
-		assert.Equal(t, tc.operator, expr.Operator)
-		assert.IsType(t, &ast.IntegerLiteral{}, expr.Left)
-		left := expr.Left.(*ast.IntegerLiteral)
-		assert.Equal(t, tc.leftValue, left.Value)
-		assert.Equal(t, fmt.Sprintf(`%d`, tc.leftValue), left.TokenLiteral())
-		right := expr.Right.(*ast.IntegerLiteral)
-		assert.Equal(t, tc.rightValue, right.Value)
-		assert.Equal(t, fmt.Sprintf(`%d`, tc.rightValue), right.TokenLiteral())
+		testInfixExpression(t, stmt.Expression, tc.leftValue, tc.operator, tc.rightValue)
 	}
 }
 
@@ -145,56 +169,55 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 	tests := []struct {
 		input    string
 		expected string
-	}{
-		{
-			`-a * b`,
-			`((-a) * b)`,
-		},
-		{
-			`!-a`,
-			`(!(-a))`,
-		},
-		{
-			`a + b + c`,
-			`((a + b) + c)`,
-		},
-		{
-			`a + b - c`,
-			`((a + b) - c)`,
-		},
-		{
-			`a * b * c`,
-			`((a * b) * c)`,
-		},
-		{
-			`a * b / c`,
-			`((a * b) / c)`,
-		},
-		{
-			`a + b / c`,
-			`(a + (b / c))`,
-		},
-		{
-			`a + b * c + d / e - f`,
-			`(((a + (b * c)) + (d / e)) - f)`,
-		},
-		{
-			`3 + 4; -5 * 5;`,
-			`(3 + 4)((-5) * 5)`,
-		},
-		{
-			`5 > 4 == 3 < 4`,
-			`((5 > 4) == (3 < 4))`,
-		},
-		{
-			`5 > 4 != 3 < 4`,
-			`((5 > 4) != (3 < 4))`,
-		},
-		{
-			`3 + 4 * 5 == 3 * 1 + 4 * 5`,
-			`((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))`,
-		},
-	}
+	}{{
+		`true`,
+		`true`,
+	}, {
+		`false`,
+		`false`,
+	}, {
+		`3 > 5 == false`,
+		`((3 > 5) == false)`,
+	}, {
+		`3 < 5 == true`,
+		`((3 < 5) == true)`,
+	}, {
+		`-a * b`,
+		`((-a) * b)`,
+	}, {
+		`!-a`,
+		`(!(-a))`,
+	}, {
+		`a + b + c`,
+		`((a + b) + c)`,
+	}, {
+		`a + b - c`,
+		`((a + b) - c)`,
+	}, {
+		`a * b * c`,
+		`((a * b) * c)`,
+	}, {
+		`a * b / c`,
+		`((a * b) / c)`,
+	}, {
+		`a + b / c`,
+		`(a + (b / c))`,
+	}, {
+		`a + b * c + d / e - f`,
+		`(((a + (b * c)) + (d / e)) - f)`,
+	}, {
+		`3 + 4; -5 * 5;`,
+		`(3 + 4)((-5) * 5)`,
+	}, {
+		`5 > 4 == 3 < 4`,
+		`((5 > 4) == (3 < 4))`,
+	}, {
+		`5 > 4 != 3 < 4`,
+		`((5 > 4) != (3 < 4))`,
+	}, {
+		`3 + 4 * 5 == 3 * 1 + 4 * 5`,
+		`((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))`,
+	}}
 	for _, tc := range tests {
 		program := initializeParserTest(t, tc.input)
 		assert.Equal(t, tc.expected, program.String())
@@ -208,6 +231,48 @@ func initializeParserTest(t *testing.T, input string) *ast.Program {
 	checkErrors(t, p)
 
 	return program
+}
+
+func testIntegerLiteral(t *testing.T, expr ast.Expression, expVal int64) {
+	assert.IsType(t, &ast.IntegerLiteral{}, expr)
+	il := expr.(*ast.IntegerLiteral)
+	assert.Equal(t, expVal, il.Value)
+	assert.Equal(t, fmt.Sprintf(`%d`, expVal), il.TokenLiteral())
+}
+
+func testBooleanLiteral(t *testing.T, expr ast.Expression, expVal bool) {
+	assert.IsType(t, &ast.BooleanLiteral{}, expr)
+	bl := expr.(*ast.BooleanLiteral)
+	assert.Equal(t, expVal, bl.Value)
+	assert.Equal(t, fmt.Sprintf(`%v`, expVal), bl.TokenLiteral())
+}
+
+func testIdentifier(t *testing.T, expr ast.Expression, expVal string) {
+	assert.IsType(t, &ast.Identifier{}, expr)
+	ident := expr.(*ast.Identifier)
+	assert.Equal(t, expVal, ident.Value)
+	assert.Equal(t, expVal, ident.TokenLiteral())
+}
+
+func testLiteralExpression(t *testing.T, expr ast.Expression, expected interface{}) {
+	switch v := expected.(type) {
+	case bool:
+		testBooleanLiteral(t, expr, v)
+	case int:
+		testIntegerLiteral(t, expr, int64(v))
+	case int64:
+		testIntegerLiteral(t, expr, v)
+	case string:
+		testIdentifier(t, expr, v)
+	}
+}
+
+func testInfixExpression(t *testing.T, expr ast.Expression, expLeft interface{}, expOp string, expRight interface{}) {
+	assert.IsType(t, &ast.InfixExpression{}, expr)
+	infixExpr := expr.(*ast.InfixExpression)
+	testLiteralExpression(t, infixExpr.Left, expLeft)
+	assert.Equal(t, expOp, infixExpr.Operator)
+	testLiteralExpression(t, infixExpr.Right, expRight)
 }
 
 func checkErrors(t *testing.T, p *Parser) {
