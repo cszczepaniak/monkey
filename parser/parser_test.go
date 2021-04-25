@@ -17,10 +17,8 @@ func TestLetStatements(t *testing.T) {
 		let foobar = 838383;
 		`
 
-	program := initializeParserTest(t, input)
-
+	program := assertProgram(t, input, 3)
 	assert.NotNil(t, program)
-	assert.Len(t, program.Statements, 3)
 
 	tests := []struct {
 		expectedIdentifier string
@@ -44,9 +42,7 @@ func TestReturnStatements(t *testing.T) {
 		return 239332;
 		`
 
-	program := initializeParserTest(t, input)
-
-	assert.Len(t, program.Statements, 3)
+	program := assertProgram(t, input, 3)
 
 	tests := []struct {
 		expVal int64
@@ -70,10 +66,7 @@ func TestReturnStatements(t *testing.T) {
 
 func TestIdentifierExpression(t *testing.T) {
 	input := `foobar;`
-	program := initializeParserTest(t, input)
-
-	assert.Len(t, program.Statements, 1)
-	assert.IsType(t, &ast.ExpressionStatement{}, program.Statements[0])
+	program := assertProgram(t, input, 1, &ast.ExpressionStatement{})
 	stmt := program.Statements[0].(*ast.ExpressionStatement)
 	assert.IsType(t, &ast.Identifier{}, stmt.Expression)
 	ident := stmt.Expression.(*ast.Identifier)
@@ -83,10 +76,7 @@ func TestIdentifierExpression(t *testing.T) {
 
 func TestIntLiteralExpression(t *testing.T) {
 	input := `5;`
-	program := initializeParserTest(t, input)
-
-	assert.Len(t, program.Statements, 1)
-	assert.IsType(t, &ast.ExpressionStatement{}, program.Statements[0])
+	program := assertProgram(t, input, 1, &ast.ExpressionStatement{})
 	stmt := program.Statements[0].(*ast.ExpressionStatement)
 	assertIntegerLiteral(t, stmt.Expression, 5)
 }
@@ -104,9 +94,7 @@ func TestBoolLiteralExpression(t *testing.T) {
 	}}
 
 	for _, tc := range tests {
-		program := initializeParserTest(t, tc.input)
-		assert.Len(t, program.Statements, 1)
-		assert.IsType(t, &ast.ExpressionStatement{}, program.Statements[0])
+		program := assertProgram(t, tc.input, 1, &ast.ExpressionStatement{})
 		stmt := program.Statements[0].(*ast.ExpressionStatement)
 		assertLiteralExpression(t, stmt.Expression, tc.expVal)
 	}
@@ -125,9 +113,7 @@ func TestPrefixExpressions(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		program := initializeParserTest(t, tc.input)
-		assert.Len(t, program.Statements, 1)
-		assert.IsType(t, &ast.ExpressionStatement{}, program.Statements[0])
+		program := assertProgram(t, tc.input, 1, &ast.ExpressionStatement{})
 		stmt := program.Statements[0].(*ast.ExpressionStatement)
 		assert.IsType(t, &ast.PrefixExpression{}, stmt.Expression)
 		expr := stmt.Expression.(*ast.PrefixExpression)
@@ -157,12 +143,49 @@ func TestInfixExpressions(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		program := initializeParserTest(t, tc.input)
-		assert.Len(t, program.Statements, 1)
-		assert.IsType(t, &ast.ExpressionStatement{}, program.Statements[0])
+		program := assertProgram(t, tc.input, 1, &ast.ExpressionStatement{})
 		stmt := program.Statements[0].(*ast.ExpressionStatement)
 		assertInfixExpression(t, stmt.Expression, tc.leftValue, tc.operator, tc.rightValue)
 	}
+}
+
+func TestIfExpression(t *testing.T) {
+	input := `if (x < y) { x }`
+
+	program := assertProgram(t, input, 1, &ast.ExpressionStatement{})
+	stmt := program.Statements[0].(*ast.ExpressionStatement)
+	assert.IsType(t, &ast.IfExpression{}, stmt.Expression)
+	expr := stmt.Expression.(*ast.IfExpression)
+
+	assertInfixExpression(t, expr.Condition, `x`, `<`, `y`)
+
+	assert.Len(t, expr.Consequence.Statements, 1)
+	consequence := expr.Consequence.Statements[0].(*ast.ExpressionStatement)
+	assertIdentifier(t, consequence.Expression, `x`)
+	assert.Nil(t, expr.Alternative)
+}
+
+func TestIfElseExpression(t *testing.T) {
+	input := `if (x < y) { x } else { y }`
+
+	program := assertProgram(t, input, 1, &ast.ExpressionStatement{})
+	stmt := program.Statements[0].(*ast.ExpressionStatement)
+	assert.IsType(t, &ast.IfExpression{}, stmt.Expression)
+	expr := stmt.Expression.(*ast.IfExpression)
+
+	assertInfixExpression(t, expr.Condition, `x`, `<`, `y`)
+
+	assert.Len(t, expr.Consequence.Statements, 1)
+	assert.IsType(t, &ast.ExpressionStatement{}, expr.Consequence.Statements[0])
+	consequence := expr.Consequence.Statements[0].(*ast.ExpressionStatement)
+	assertIdentifier(t, consequence.Expression, `x`)
+
+	assert.NotNil(t, expr.Alternative)
+	assert.Len(t, expr.Alternative.Statements, 1)
+	assert.IsType(t, &ast.ExpressionStatement{}, expr.Alternative.Statements[0])
+	alternative := expr.Alternative.Statements[0].(*ast.ExpressionStatement)
+	assertIdentifier(t, alternative.Expression, `y`)
+
 }
 
 func TestOperatorPrecedenceParsing(t *testing.T) {
@@ -170,6 +193,21 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 		input    string
 		expected string
 	}{{
+		`1 + (2 + 3) + 4`,
+		`((1 + (2 + 3)) + 4)`,
+	}, {
+		`(2 + 2) * 5`,
+		`((2 + 2) * 5)`,
+	}, {
+		`2 / (5 + 5)`,
+		`(2 / (5 + 5))`,
+	}, {
+		`-(5 + 5)`,
+		`(-(5 + 5))`,
+	}, {
+		`!(true == true)`,
+		`(!(true == true))`,
+	}, {
 		`true`,
 		`true`,
 	}, {
@@ -219,16 +257,25 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 		`((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))`,
 	}}
 	for _, tc := range tests {
-		program := initializeParserTest(t, tc.input)
+		program := assertProgram(t, tc.input, 1)
 		assert.Equal(t, tc.expected, program.String())
 	}
 }
 
-func initializeParserTest(t *testing.T, input string) *ast.Program {
+func assertProgram(t *testing.T, input string, expNumStatements int, expStatementTypes ...interface{}) *ast.Program {
 	l := lexer.New(input)
 	p := New(l)
 	program := p.ParseProgram()
 	checkErrors(t, p)
+
+	if len(expStatementTypes) > 0 {
+		assert.Len(t, program.Statements, expNumStatements)
+		assert.Len(t, expStatementTypes, expNumStatements)
+
+		for i, s := range program.Statements {
+			assert.IsType(t, expStatementTypes[i], s)
+		}
+	}
 
 	return program
 }
