@@ -33,7 +33,7 @@ func TestLetStatements(t *testing.T) {
 		assert.Equal(t, `let`, program.Statements[i].TokenLiteral())
 		assert.IsType(t, &ast.LetStatement{}, program.Statements[i])
 		letStmt := program.Statements[i].(*ast.LetStatement)
-		testIdentifier(t, letStmt.Name, tc.expectedIdentifier)
+		assertIdentifier(t, letStmt.Name, tc.expectedIdentifier)
 	}
 }
 
@@ -64,7 +64,7 @@ func TestReturnStatements(t *testing.T) {
 		assert.IsType(t, &ast.ReturnStatement{}, program.Statements[i])
 		ret := program.Statements[i].(*ast.ReturnStatement)
 		assert.Equal(t, `return`, ret.TokenLiteral())
-		// testIntegerLitseral(t, ret.ReturnValue, tc.expVal)
+		// assertIntegerLiteral(t, ret.ReturnValue, tc.expVal)
 	}
 }
 
@@ -88,7 +88,7 @@ func TestIntLiteralExpression(t *testing.T) {
 	assert.Len(t, program.Statements, 1)
 	assert.IsType(t, &ast.ExpressionStatement{}, program.Statements[0])
 	stmt := program.Statements[0].(*ast.ExpressionStatement)
-	testIntegerLiteral(t, stmt.Expression, 5)
+	assertIntegerLiteral(t, stmt.Expression, 5)
 }
 
 func TestBoolLiteralExpression(t *testing.T) {
@@ -108,7 +108,7 @@ func TestBoolLiteralExpression(t *testing.T) {
 		assert.Len(t, program.Statements, 1)
 		assert.IsType(t, &ast.ExpressionStatement{}, program.Statements[0])
 		stmt := program.Statements[0].(*ast.ExpressionStatement)
-		testLiteralExpression(t, stmt.Expression, tc.expVal)
+		assertLiteralExpression(t, stmt.Expression, tc.expVal)
 	}
 }
 
@@ -132,7 +132,7 @@ func TestPrefixExpressions(t *testing.T) {
 		assert.IsType(t, &ast.PrefixExpression{}, stmt.Expression)
 		expr := stmt.Expression.(*ast.PrefixExpression)
 		assert.Equal(t, tc.operator, expr.Operator)
-		testLiteralExpression(t, expr.Right, tc.expVal)
+		assertLiteralExpression(t, expr.Right, tc.expVal)
 	}
 }
 
@@ -161,7 +161,7 @@ func TestInfixExpressions(t *testing.T) {
 		assert.Len(t, program.Statements, 1)
 		assert.IsType(t, &ast.ExpressionStatement{}, program.Statements[0])
 		stmt := program.Statements[0].(*ast.ExpressionStatement)
-		testInfixExpression(t, stmt.Expression, tc.leftValue, tc.operator, tc.rightValue)
+		assertInfixExpression(t, stmt.Expression, tc.leftValue, tc.operator, tc.rightValue)
 	}
 }
 
@@ -233,46 +233,46 @@ func initializeParserTest(t *testing.T, input string) *ast.Program {
 	return program
 }
 
-func testIntegerLiteral(t *testing.T, expr ast.Expression, expVal int64) {
+func assertIntegerLiteral(t *testing.T, expr ast.Expression, expVal int64) {
 	assert.IsType(t, &ast.IntegerLiteral{}, expr)
 	il := expr.(*ast.IntegerLiteral)
 	assert.Equal(t, expVal, il.Value)
 	assert.Equal(t, fmt.Sprintf(`%d`, expVal), il.TokenLiteral())
 }
 
-func testBooleanLiteral(t *testing.T, expr ast.Expression, expVal bool) {
+func assertBooleanLiteral(t *testing.T, expr ast.Expression, expVal bool) {
 	assert.IsType(t, &ast.BooleanLiteral{}, expr)
 	bl := expr.(*ast.BooleanLiteral)
 	assert.Equal(t, expVal, bl.Value)
 	assert.Equal(t, fmt.Sprintf(`%v`, expVal), bl.TokenLiteral())
 }
 
-func testIdentifier(t *testing.T, expr ast.Expression, expVal string) {
+func assertIdentifier(t *testing.T, expr ast.Expression, expVal string) {
 	assert.IsType(t, &ast.Identifier{}, expr)
 	ident := expr.(*ast.Identifier)
 	assert.Equal(t, expVal, ident.Value)
 	assert.Equal(t, expVal, ident.TokenLiteral())
 }
 
-func testLiteralExpression(t *testing.T, expr ast.Expression, expected interface{}) {
+func assertLiteralExpression(t *testing.T, expr ast.Expression, expected interface{}) {
 	switch v := expected.(type) {
 	case bool:
-		testBooleanLiteral(t, expr, v)
+		assertBooleanLiteral(t, expr, v)
 	case int:
-		testIntegerLiteral(t, expr, int64(v))
+		assertIntegerLiteral(t, expr, int64(v))
 	case int64:
-		testIntegerLiteral(t, expr, v)
+		assertIntegerLiteral(t, expr, v)
 	case string:
-		testIdentifier(t, expr, v)
+		assertIdentifier(t, expr, v)
 	}
 }
 
-func testInfixExpression(t *testing.T, expr ast.Expression, expLeft interface{}, expOp string, expRight interface{}) {
+func assertInfixExpression(t *testing.T, expr ast.Expression, expLeft interface{}, expOp string, expRight interface{}) {
 	assert.IsType(t, &ast.InfixExpression{}, expr)
 	infixExpr := expr.(*ast.InfixExpression)
-	testLiteralExpression(t, infixExpr.Left, expLeft)
+	assertLiteralExpression(t, infixExpr.Left, expLeft)
 	assert.Equal(t, expOp, infixExpr.Operator)
-	testLiteralExpression(t, infixExpr.Right, expRight)
+	assertLiteralExpression(t, infixExpr.Right, expRight)
 }
 
 func checkErrors(t *testing.T, p *Parser) {
