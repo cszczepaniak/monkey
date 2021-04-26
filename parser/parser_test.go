@@ -11,56 +11,53 @@ import (
 )
 
 func TestLetStatements(t *testing.T) {
-	input := `
-		let x = 5;
-		let y = 10;
-		let foobar = 838383;
-		`
-
-	program := assertProgram(t, input, 3)
-	assert.NotNil(t, program)
-
 	tests := []struct {
-		expectedIdentifier string
-	}{
-		{`x`},
-		{`y`},
-		{`foobar`},
-	}
-	for i, tc := range tests {
-		assert.Equal(t, `let`, program.Statements[i].TokenLiteral())
-		assert.IsType(t, &ast.LetStatement{}, program.Statements[i])
-		letStmt := program.Statements[i].(*ast.LetStatement)
-		assertIdentifier(t, letStmt.Name, tc.expectedIdentifier)
+		input    string
+		expIdent string
+		expValue interface{}
+	}{{
+		`let x = 5;`,
+		`x`,
+		5,
+	}, {
+		`let y = true;`,
+		`y`,
+		true,
+	}, {
+		`let foobar = y;`,
+		`foobar`,
+		`y`,
+	}}
+
+	for _, tc := range tests {
+		program := assertProgram(t, tc.input, 1)
+		assert.IsType(t, &ast.LetStatement{}, program.Statements[0])
+		letStmt := program.Statements[0].(*ast.LetStatement)
+		assertIdentifier(t, letStmt.Name, tc.expIdent)
+		assertLiteralExpression(t, letStmt.Value, tc.expValue)
 	}
 }
 
 func TestReturnStatements(t *testing.T) {
-	input := `
-		return 5;
-		return 10;
-		return 239332;
-		`
-
-	program := assertProgram(t, input, 3)
-
 	tests := []struct {
-		expVal int64
+		input    string
+		expValue interface{}
 	}{{
+		`return 5;`,
 		5,
 	}, {
-		10,
+		`return true;`,
+		true,
 	}, {
-		239332,
+		`return y;`,
+		`y`,
 	}}
 
-	for i, _ := range tests {
-		s := program.Statements[i]
-		fmt.Print(s)
-		assert.IsType(t, &ast.ReturnStatement{}, program.Statements[i])
-		ret := program.Statements[i].(*ast.ReturnStatement)
-		assert.Equal(t, `return`, ret.TokenLiteral())
-		// assertIntegerLiteral(t, ret.ReturnValue, tc.expVal)
+	for _, tc := range tests {
+		program := assertProgram(t, tc.input, 1)
+		assert.IsType(t, &ast.ReturnStatement{}, program.Statements[0])
+		ret := program.Statements[0].(*ast.ReturnStatement)
+		assertLiteralExpression(t, ret.ReturnValue, tc.expValue)
 	}
 }
 
@@ -185,7 +182,84 @@ func TestIfElseExpression(t *testing.T) {
 	assert.IsType(t, &ast.ExpressionStatement{}, expr.Alternative.Statements[0])
 	alternative := expr.Alternative.Statements[0].(*ast.ExpressionStatement)
 	assertIdentifier(t, alternative.Expression, `y`)
+}
 
+func TestFuncLiteral(t *testing.T) {
+	tests := []struct {
+		input                string
+		expArgs              []string
+		expNumBodyStatements int
+	}{{
+		`fn() { x + y; };`,
+		[]string{},
+		1,
+	}, {
+		`fn(a) { x + y; };`,
+		[]string{`a`},
+		1,
+	}, {
+		`fn(a, b, c) { x + y; };`,
+		[]string{`a`, `b`, `c`},
+		1,
+	}}
+
+	for _, tc := range tests {
+		program := assertProgram(t, tc.input, 1, &ast.ExpressionStatement{})
+
+		stmt := program.Statements[0].(*ast.ExpressionStatement)
+		assert.IsType(t, &ast.FunctionLiteral{}, stmt.Expression)
+		fn := stmt.Expression.(*ast.FunctionLiteral)
+
+		assert.Len(t, fn.Args, len(tc.expArgs))
+		for i, exp := range tc.expArgs {
+			assertIdentifier(t, fn.Args[i], exp)
+		}
+
+		assert.Len(t, fn.Body.Statements, tc.expNumBodyStatements)
+		assert.IsType(t, &ast.ExpressionStatement{}, fn.Body.Statements[0])
+		bodyStmt := fn.Body.Statements[0].(*ast.ExpressionStatement)
+		assertInfixExpression(t, bodyStmt.Expression, `x`, `+`, `y`)
+	}
+}
+
+func TestCallExpression(t *testing.T) {
+	tests := []struct {
+		input       string
+		expFunction string
+		expArgs     []string
+	}{{
+		`add()`,
+		`add`,
+		[]string{},
+	}, {
+		`add(1, 2)`,
+		`add`,
+		[]string{`1`, `2`},
+	}, {
+		`add(1 + 1, 2 * 2)`,
+		`add`,
+		[]string{`(1 + 1)`, `(2 * 2)`},
+	}, {
+		`add(1 + 1, sub(2, 2 * 2))`,
+		`add`,
+		[]string{`(1 + 1)`, `sub(2, (2 * 2))`},
+	}, {
+		`fn(a, b) { a + b; }(x, y)`,
+		`fn(a, b) { (a + b); }`,
+		[]string{`x`, `y`},
+	}}
+
+	for _, tc := range tests {
+		program := assertProgram(t, tc.input, 1, &ast.ExpressionStatement{})
+		stmt := program.Statements[0].(*ast.ExpressionStatement)
+		assert.IsType(t, &ast.CallExpression{}, stmt.Expression)
+		call := stmt.Expression.(*ast.CallExpression)
+		assert.Equal(t, tc.expFunction, call.Function.String())
+		assert.Len(t, call.Args, len(tc.expArgs))
+		for i, arg := range call.Args {
+			assert.Equal(t, tc.expArgs[i], arg.String())
+		}
+	}
 }
 
 func TestOperatorPrecedenceParsing(t *testing.T) {
@@ -193,6 +267,15 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 		input    string
 		expected string
 	}{{
+		`a + add(b * c) + d`,
+		`((a + add((b * c))) + d)`,
+	}, {
+		`add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))`,
+		`add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))`,
+	}, {
+		`add(a + b + c * d / f + g)`,
+		`add((((a + b) + ((c * d) / f)) + g))`,
+	}, {
 		`1 + (2 + 3) + 4`,
 		`((1 + (2 + 3)) + 4)`,
 	}, {

@@ -213,9 +213,63 @@ func (bs *BlockStatement) TokenLiteral() string {
 func (bs *BlockStatement) String() string {
 	var out bytes.Buffer
 
+	out.WriteString(`{ `)
 	for _, s := range bs.Statements {
 		out.WriteString(s.String())
+		out.WriteString(`; `)
 	}
+	out.WriteString(`}`)
+
+	return out.String()
+}
+
+type FunctionLiteral struct {
+	Token token.Token
+	Args  []*Identifier
+	Body  *BlockStatement
+}
+
+func (fl *FunctionLiteral) expressionNode() {}
+func (fl *FunctionLiteral) TokenLiteral() string {
+	return fl.Token.Literal
+}
+func (fl *FunctionLiteral) String() string {
+	var out bytes.Buffer
+	out.WriteString(`fn(`)
+	for i, arg := range fl.Args {
+		out.WriteString(arg.String())
+		if i < len(fl.Args)-1 {
+			out.WriteString(`, `)
+		}
+	}
+	out.WriteString(`) `)
+	out.WriteString(fl.Body.String())
+
+	return out.String()
+}
+
+type CallExpression struct {
+	Token    token.Token
+	Function Expression
+	Args     []Expression
+}
+
+func (ce *CallExpression) expressionNode() {}
+func (ce *CallExpression) TokenLiteral() string {
+	return ce.Token.Literal
+}
+func (ce *CallExpression) String() string {
+	var out bytes.Buffer
+
+	out.WriteString(ce.Function.String())
+	out.WriteString(`(`)
+	for i, arg := range ce.Args {
+		out.WriteString(arg.String())
+		if i < len(ce.Args)-1 {
+			out.WriteString(`, `)
+		}
+	}
+	out.WriteString(`)`)
 
 	return out.String()
 }
