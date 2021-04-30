@@ -127,6 +127,101 @@ func TestBangOperator(t *testing.T) {
 	}
 }
 
+func TestIfElseExpressions(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected interface{}
+	}{{
+		`if (true) { 10 }`, 10,
+	}, {
+		`if (false) { 10 }`, nil,
+	}, {
+		`if (1) { 10 }`, 10,
+	}, {
+		`if (1 < 2) { 10 }`, 10,
+	}, {
+		`if (1 > 2) { 10 }`, nil,
+	}, {
+		`if (1 > 2) { 10 } else { 20 }`, 20,
+	}, {
+		`if (1 < 2) { 10 } else { 20 }`, 10,
+	}}
+
+	for _, tc := range tests {
+		result := evalInput(tc.input)
+		exp, ok := tc.expected.(int)
+		if ok {
+			assertIntegerObject(t, result, int64(exp))
+		} else {
+			assertNullObject(t, result)
+		}
+	}
+}
+
+func TestReturnStatements(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int64
+	}{{
+		`return 10;`, 10,
+	}, {
+		`return 10; 9;`, 10,
+	}, {
+		`return 2 * 5; 9;`, 10,
+	}, {
+		`9; return 2 * 5; 9;`, 10,
+	}, {
+		`
+		if (10 > 1) {
+			if (10 > 1) {
+				return 10;
+			}
+			return 1;
+		}`,
+		10,
+	}}
+
+	for _, tc := range tests {
+		result := evalInput(tc.input)
+		assertIntegerObject(t, result, tc.expected)
+	}
+}
+
+func TestErrorHandling(t *testing.T) {
+	tests := []struct {
+		input  string
+		expMsg string
+	}{{
+		`5 + true;`, `type mismatch: INTEGER + BOOLEAN`,
+	}, {
+		`5 + true; 5;`, `type mismatch: INTEGER + BOOLEAN`,
+	}, {
+		`-true`, `unknown operator: -BOOLEAN`,
+	}, {
+		`true + false`, `unknown operator: BOOLEAN + BOOLEAN`,
+	}, {
+		`5; true + false; 5;`, `unknown operator: BOOLEAN + BOOLEAN`,
+	}, {
+		`if (1 < 2) { true + false; }`, `unknown operator: BOOLEAN + BOOLEAN`,
+	}, {
+		`
+		if (10 > 1) {
+			if (10 > 1) {
+				return true + false;
+			}
+			return 1;
+		}`,
+		`unknown operator: BOOLEAN + BOOLEAN`,
+	}}
+
+	for _, tc := range tests {
+		result := evalInput(tc.input)
+		assert.IsType(t, &object.Error{}, result)
+		errObj := result.(*object.Error)
+		assert.Equal(t, tc.expMsg, errObj.Message)
+	}
+}
+
 func evalInput(input string) object.Object {
 	l := lexer.New(input)
 	p := parser.New(l)
@@ -145,4 +240,8 @@ func assertBooleanObject(t *testing.T, obj object.Object, exp bool) {
 	assert.IsType(t, &object.Boolean{}, obj)
 	boolean := obj.(*object.Boolean)
 	assert.Equal(t, exp, boolean.Value)
+}
+
+func assertNullObject(t *testing.T, obj object.Object) {
+	assert.Equal(t, NULL, obj)
 }
