@@ -246,6 +246,66 @@ func TestLetStatements(t *testing.T) {
 	}
 }
 
+func TestFunctionObject(t *testing.T) {
+	input := `fn(x) { x + 2; }`
+	result := evalInput(input)
+	assert.IsType(t, &object.Function{}, result)
+	fn := result.(*object.Function)
+	assert.Len(t, fn.Args, 1)
+	assert.Equal(t, `x`, fn.Args[0].String())
+	assert.Equal(t, `{ (x + 2); }`, fn.Body.String())
+}
+
+func TestFunctionApplication(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int64
+	}{{
+		`let f = fn(x) { x; }; f(5);`, 5,
+	}, {
+		`let f = fn(x) { return x; }; f(5);`, 5,
+	}, {
+		`let double = fn(x) { x * 2; }; double(5);`, 10,
+	}, {
+		`let add = fn(x, y) { x + y; }; add(4, 5);`, 9,
+	}, {
+		`let add = fn(x, y) { x + y; }; add(4, add(5, 5));`, 14,
+	}, {
+		`fn(x) { x; }(5)`, 5,
+	}, {
+		`let f = fn(x) {
+			if (x == 0) {
+				return 1;
+			}
+			return x * f(x-1);
+		};
+		f(5);
+		`,
+		120,
+	}, {
+		`
+		let newAdder = fn(x) {
+			fn(y) { x + y; }
+		};
+		let addTwo = newAdder(2);
+		addTwo(3);
+		`,
+		5,
+	}, {
+		`
+		let sub = fn(x, y) { x - y };
+		let applyFn = fn(f, x, y) { f(x, y); };
+		applyFn(sub, 3, 1);
+		`,
+		2,
+	}}
+
+	for _, tc := range tests {
+		result := evalInput(tc.input)
+		assertIntegerObject(t, result, tc.expected)
+	}
+}
+
 func evalInput(input string) object.Object {
 	l := lexer.New(input)
 	p := parser.New(l)

@@ -21,6 +21,16 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return evalBlockStatement(n, env)
 	case *ast.ExpressionStatement:
 		return Eval(n.Expression, env)
+	case *ast.CallExpression:
+		fn := Eval(n.Function, env)
+		if fn.Type() == object.ERROR {
+			return fn
+		}
+		args := evalExpressions(n.Args, env)
+		if len(args) == 1 && args[0].Type() == object.ERROR {
+			return args[0]
+		}
+		return applyFunction(fn, args)
 	case *ast.IfExpression:
 		return evalIfExpression(n, env)
 	case *ast.ReturnStatement:
@@ -41,6 +51,8 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return &object.Integer{Value: n.Value}
 	case *ast.BooleanLiteral:
 		return nativeBoolToBoolObject(n.Value)
+	case *ast.FunctionLiteral:
+		return &object.Function{Args: n.Args, Body: n.Body, Env: env}
 	case *ast.PrefixExpression:
 		right := Eval(n.Right, env)
 		if right.Type() == object.ERROR {
@@ -86,6 +98,34 @@ func evalBlockStatement(bs *ast.BlockStatement, env *object.Environment) object.
 		}
 	}
 	return res
+}
+
+func evalExpressions(exprs []ast.Expression, env *object.Environment) []object.Object {
+	var result []object.Object
+	for _, e := range exprs {
+		r := Eval(e, env)
+		if r.Type() == object.ERROR {
+			return []object.Object{r}
+		}
+		result = append(result, r)
+	}
+	return result
+}
+
+func applyFunction(obj object.Object, args []object.Object) object.Object {
+	fn, ok := obj.(*object.Function)
+	if !ok {
+		return newErrorf(`not a function: %s`, obj.Type())
+	}
+	env := object.NewEnclosedEnvironment(fn.Env)
+	for i, a := range fn.Args {
+		env.Set(a.Value, args[i])
+	}
+	result := Eval(fn.Body, env)
+	if ret, ok := result.(*object.ReturnValue); ok {
+		return ret.Value
+	}
+	return result
 }
 
 func evalIfExpression(is *ast.IfExpression, env *object.Environment) object.Object {

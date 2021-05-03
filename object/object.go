@@ -1,13 +1,19 @@
 package object
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+
+	"github.com/cszczepaniak/monkey/ast"
+)
 
 const (
-	INTEGER = "INTEGER"
-	BOOLEAN = "BOOLEAN"
-	NULL    = "NULL"
-	RETURN  = "RETURN"
-	ERROR   = "ERROR"
+	INTEGER  = "INTEGER"
+	BOOLEAN  = "BOOLEAN"
+	NULL     = "NULL"
+	RETURN   = "RETURN"
+	ERROR    = "ERROR"
+	FUNCTION = "FUNCTION"
 )
 
 type Type string
@@ -68,4 +74,30 @@ func (e *Error) Inspect() string {
 }
 func (e *Error) Type() Type {
 	return ERROR
+}
+
+type Function struct {
+	Args []*ast.Identifier
+	Body *ast.BlockStatement
+	Env  *Environment
+}
+
+func (f *Function) Inspect() string {
+	var out bytes.Buffer
+
+	out.WriteString(`fn(`)
+	for i, a := range f.Args {
+		out.WriteString(a.String())
+		if i < len(f.Args)-1 {
+			out.WriteString(`, `)
+		}
+	}
+	out.WriteString(") {\n")
+	out.WriteString(f.Body.String())
+	out.WriteString("\n}")
+
+	return out.String()
+}
+func (f *Function) Type() Type {
+	return FUNCTION
 }
